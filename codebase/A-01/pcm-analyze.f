@@ -18,8 +18,8 @@ decimal
 16000 constant SAMPLE-RATE          \ Hz – must match your audio files
 2      constant BYTES-PER-SAMPLE    \ 16‑bit = 2 bytes
 
-s" ref.raw"   2constant REF-FILE     \ reference template (come here)
-s" test.raw"  2constant TEST-FILE    \ file you want to scan
+s" ref_test.raw"   2constant REF-FILE     \ reference template (come here)
+s" test_test.raw"  2constant TEST-FILE    \ file you want to scan
 
 \ Fixed‑point parameters
 14 constant FRAC-BITS               \ 14 fractional bits → 2¹⁴ = 16384
@@ -29,10 +29,17 @@ s" test.raw"  2constant TEST-FILE    \ file you want to scan
 \ 0.80e0 FRAC-BITS lshift f>s constant THRESHOLD-FIXED
 \ 0.80e0 SCALE s>f f* f>s constant THRESHOLD-FIXED
 13107 constant THRESHOLD-FIXED   \ 0.80 * SCALE rounded
+9830  constant COARSE-THRESHOLD-FIXED \ 0.60 * SCALE rounded
+16    constant COARSE-STRIDE
 
 cr ." FRAC-BITS = " FRAC-BITS . cr
 cr ." SCALE     = " SCALE . cr
 cr ." THRESHOLD-FIXED (fixed-point) = " THRESHOLD-FIXED . cr
+
+\ Detection hook (override in other code)
+\ Stack effect: ( sample-idx -- ) where sample-idx is the detected position
+defer on-detect
+:noname drop ; is on-detect
 
 \ Unsigned 64‑bit multiply
 : umul64 ( u1 u2 -- ud )  um* ;
@@ -85,6 +92,10 @@ variable samples-buf         \ address of final sample cell buffer
   LOOP
   2drop ;                   \ drop byte-addr and sample-addr
 
+\ Double helpers
+: d0! ( addr -- )  0 0 rot 2! ;
+: d+! ( ud addr -- )  >r r@ 2@ d+ r> 2! ;
+
 \ Integer square root for unsigned 64‑bit (Newton method)
 : isqrt64 ( u -- u )
     { n -- }
@@ -117,18 +128,32 @@ variable samples-buf         \ address of final sample cell buffer
 : d<< ( ud u -- ud )
     0 ?do d2* loop ;
 
-\ Normalised correlation in fixed‑point
-: correlation-fixed ( a-addr b-addr n -- corr )
-    { a b n -- }
-    a b n dot64                       \ numerator (signed d)
-    a n sumsq64 d>s isqrt64           \ denom_a (u)
-    b n sumsq64 d>s isqrt64           \ denom_b (u)
-    umul64 d>s { denom }              \ denom (u)
+\ Double absolute value
+: dabs ( d -- ud )
+    2dup d0< if dnegate then ;
+
+\ Normalised correlation in fixed‑point (one-pass window sumsq)
+2variable dot-acc
+2variable sum-acc
+
+    \ corr-fixed-window returns fixed-point correlation (SCALE = 1<<FRAC-BITS)
+: corr-fixed-window ( test-addr ref-addr n refnorm -- corr )
+    { t r n refnorm -- }
+    dot-acc d0!
+    sum-acc d0!
+    n 0 do
+        t i cells + @ { x }
+        r i cells + @ x m* dot-acc d+!
+        x x m* sum-acc d+!
+    loop
+    dot-acc 2@                         \ numerator (signed d)
+    sum-acc 2@ d>s isqrt64             \ window norm (u)
+    refnorm um* d>s { denom }          \ denom (u)
     denom 0= if 2drop 0 exit then
     2dup d0< if dnegate -1 else 0 then { sign }  \ save sign, make numerator positive
-    FRAC-BITS d<<                     \ scale numerator
-    denom um/mod nip                  \ unsigned quotient
-    sign 0< if negate then ;          \ apply sign
+    FRAC-BITS d<<                       \ scale numerator
+    denom um/mod nip                    \ unsigned quotient
+    sign 0< if negate then ;            \ apply sign
 
 \ --------------------------------------------------------------
 \ Core loader
@@ -238,17 +263,142 @@ TEST-FILE load-raw 2constant TEST-BUF \ ( addr n )
 \ --------------------------------------------------------------
 \ Sliding‑window detector
 \ --------------------------------------------------------------
+32 constant MAX-LAG
+
 : detect-command ( -- )
+    0 { found }
+    REF-ADDR REF-LEN sumsq64 d>s isqrt64 { refnorm }
     TEST-LEN REF-LEN - 0 max          \ number of possible windows
     0 do
         TEST-ADDR i cells +           \ start of window
-        REF-ADDR REF-LEN correlation-fixed   \ compute correlation
+        REF-ADDR REF-LEN refnorm corr-fixed-window
         dup THRESHOLD-FIXED > if      \ above threshold?
+            i REF-LEN + dup
             ." Detected come here at sample "
-            i REF-LEN + . cr          \ report approximate position
+            . cr                      \ report approximate position
+            1 to found
+            on-detect
         then
         drop
     loop ;
+
+\ Coarse-to-fine scan to speed up detection
+: detect-command-fast ( -- )
+    0 { found }
+    REF-ADDR REF-LEN sumsq64 d>s isqrt64 { refnorm }
+    TEST-LEN REF-LEN - 0 max { maxwin }
+    0 maxwin COARSE-STRIDE ?do
+        TEST-ADDR i cells + 
+        REF-ADDR REF-LEN refnorm corr-fixed-window
+        dup COARSE-THRESHOLD-FIXED > if
+            \ refine locally around the coarse hit
+            i COARSE-STRIDE - 0 max
+            i COARSE-STRIDE + maxwin min
+            1+ swap do
+                TEST-ADDR j cells +
+                REF-ADDR REF-LEN refnorm corr-fixed-window
+                dup THRESHOLD-FIXED > if
+                    j REF-LEN + dup
+                    ." Detected come here at sample "
+                    . cr
+                    1 to found
+                    on-detect
+                then
+                drop
+            loop
+        then
+        drop
+    COARSE-STRIDE +loop
+    found 0= if ." No match found." cr then ;
+
+\ Run fast detection for explicit files (ref/test), frees buffers after use
+: detect-command-fast-files ( ref-addr ref-len test-addr test-len -- )
+    { rname rlen tname tlen -- }
+    rname rlen load-raw { raddr rcount }
+    tname tlen load-raw { taddr tcount }
+    0 { found }
+    raddr rcount sumsq64 d>s isqrt64 { refnorm }
+    tcount rcount - 0 max { maxwin }
+    0 maxwin COARSE-STRIDE ?do
+        taddr i cells + 
+        raddr rcount refnorm corr-fixed-window
+        dup COARSE-THRESHOLD-FIXED > if
+            i COARSE-STRIDE - 0 max
+            i COARSE-STRIDE + maxwin min
+            1+ swap do
+                taddr j cells +
+                raddr rcount refnorm corr-fixed-window
+                dup THRESHOLD-FIXED > if
+                    j rcount + dup
+                    ." Detected come here at sample "
+                    . cr
+                    1 to found
+                    on-detect
+                then
+                drop
+            loop
+        then
+        drop
+    COARSE-STRIDE +loop
+    found 0= if ." No match found." cr then
+    raddr free throw
+    taddr free throw ;
+
+\ Full scan for explicit files (slower than fast scan)
+: detect-command-files ( ref-addr ref-len test-addr test-len -- )
+    { rname rlen tname tlen -- }
+    rname rlen load-raw { raddr rcount }
+    tname tlen load-raw { taddr tcount }
+    0 { found }
+    raddr rcount sumsq64 d>s isqrt64 { refnorm }
+    tcount rcount - 0 max { maxwin }
+    maxwin 0 do
+        taddr i cells +
+        raddr rcount refnorm corr-fixed-window
+        dup THRESHOLD-FIXED > if
+            ." Detected come here at sample "
+            i rcount + . cr
+            1 to found
+        then
+        drop
+    loop
+    found 0= if ." No match found." cr then
+    raddr free throw
+    taddr free throw ;
+
+: detect-command-fast-test ( -- )
+    s" ref_test.raw" s" test_test.raw" detect-command-fast-files ;
+
+\ Helper: show which files the default detectors use
+: show-input-files ( -- )
+    ." REF-FILE: " REF-FILE type cr
+    ." TEST-FILE: " TEST-FILE type cr ;
+
+\ Command-line helpers (expects args after -e)
+: ?missing-arg ( c-addr u -- c-addr u missing? )
+    2dup 0= swap 0= and ;
+
+: detect-command-fast-args ( -- )
+    next-arg ?missing-arg if
+        2drop ." Usage: gforth pcm-analyze.f -e 'detect-command-fast-args bye' <ref.raw> <test.raw>" cr
+        exit
+    then
+    next-arg ?missing-arg if
+        2drop 2drop ." Usage: gforth pcm-analyze.f -e 'detect-command-fast-args bye' <ref.raw> <test.raw>" cr
+        exit
+    then
+    detect-command-fast-files ;
+
+: detect-command-args ( -- )
+    next-arg ?missing-arg if
+        2drop ." Usage: gforth pcm-analyze.f -e 'detect-command-args bye' <ref.raw> <test.raw>" cr
+        exit
+    then
+    next-arg ?missing-arg if
+        2drop 2drop ." Usage: gforth pcm-analyze.f -e 'detect-command-args bye' <ref.raw> <test.raw>" cr
+        exit
+    then
+    detect-command-files ;
 \ 
 \ NOTE: The caller owns the returned sample buffers.
 \ To free a loaded buffer later, do:
