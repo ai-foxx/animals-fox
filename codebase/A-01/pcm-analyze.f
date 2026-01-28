@@ -34,8 +34,8 @@ cr ." FRAC-BITS = " FRAC-BITS . cr
 cr ." SCALE     = " SCALE . cr
 cr ." THRESHOLD-FIXED (fixed-point) = " THRESHOLD-FIXED . cr
 
-\ Unsigned 64‑bit multiply (low part only – sufficient here)
-: umul64 ( u1 u2 -- ud )  >r >r  r@ r@ *  r> r> 2drop ;
+\ Unsigned 64‑bit multiply
+: umul64 ( u1 u2 -- ud )  um* ;
 \ Optional alias – makes the source read like the original
 : u- ( u1 u2 -- udiff ) - ;
 
@@ -85,78 +85,50 @@ variable samples-buf         \ address of final sample cell buffer
   LOOP
   2drop ;                   \ drop byte-addr and sample-addr
 
-\ Integer square root (Newton method)
-: sqrt ( ud -- u )
-    dup 0= if drop 0 exit then
-    1 swap 2/ 1+                     \ initial guess
+\ Integer square root for unsigned 64‑bit (Newton method)
+: isqrt64 ( u -- u )
+    { n -- }
+    n 0= if 0 exit then
+    n 2/ 1+ { x }
     begin
-        dup 2/ over + 2/
-        2dup >r >r
-        over over >
+        n x / x + 2/ { x1 }
+        x1 x <
     while
-        r> drop
+        x1 to x
     repeat
-    r> drop ;
+    x ;
 \ Dot product of two integer vectors → 64‑bit result (hi lo)
 : dot64 ( a-addr b-addr n -- ud )
-    0 0 0 do
-        dup i cells + @               \ a[i]
-        swap i cells + @              \ b[i]
-        m*                     \ 32×32 → 64‑bit (hi lo)
-        rot rot + >r >r                \ add low parts, carry high parts
-        r> r> + >r >r
-    loop
-    r> r> ;
+    { a b n -- }
+    0. n 0 do
+        a i cells + @                  \ a[i]
+        b i cells + @                  \ b[i]
+        m* d+
+    loop ;
 
 \ Sum of squares → 64‑bit result (hi lo)
 : sumsq64 ( a-addr n -- ud )
-    0 0 0 do
-        dup i cells + @               \ x
-        dup *                         \ x*x
-        >r >r                         \ add low part, carry high part
-        r> r> + >r >r
-    loop
-    r> r> ;
-\ ------------------------------------------------------------
-\  Normalised cross‑correlation for two equal‑length vectors
-\ ------------------------------------------------------------
-: dot-product ( a-addr b-addr n -- d )
-    0.0e0 0 do
-        dup i cells + @               \ a[i]
-        swap i cells + @ * f+          \ accumulate a[i]*b[i]
-    loop nip nip f> ;  
-
-: vec-norm ( a-addr n -- r )
-    0.0e0 0 do
-        dup i cells + @ dup * f+      \ sum of squares
-    loop nip sqrt ;                   \ sqrt(sum(x^2))
+    { a n -- }
+    0. n 0 do
+        a i cells + @                  \ x
+        dup m* d+
+    loop ;
+\ Double shift left by u bits
+: d<< ( ud u -- ud )
+    0 ?do d2* loop ;
 
 \ Normalised correlation in fixed‑point
 : correlation-fixed ( a-addr b-addr n -- corr )
-    >r >r >r                         \ keep lengths on return stack
-    r@ r@ r@ dot64                    \ numerator (hi lo)
-    r@ sumsq64 r@ sumsq64             \ denom_a , denom_b
-    sqrt swap sqrt                  \ sqrt_a sqrt_b
-    umul64                            \ denominator (hi lo)
-
-    \ Shift numerator left by FRAC_BITS (14) to restore fraction
-    2dup 0= if drop drop 0 exit then
-    2dup 14 lshift swap 64 14 - rshift or >r   \ new_hi
-    2dup 14 lshift >r                         \ new_lo
-
-    \ 128‑by‑64 division: (new_hi new_lo) / den
-    r> r> 0
-    2 0 do
-        2over 2over 2>r >r >r
-        2over 2over 2>r >r
-        2dup 2>r >r
-        2over 2over u>= if
-            2over 2over u- swap u- swap
-            1 swap lshift or
-        then
-        2drop 2drop
-    loop
-    r> r> drop drop ;               \ final quotient (fits 64‑bits)
+    { a b n -- }
+    a b n dot64                       \ numerator (signed d)
+    a n sumsq64 d>s isqrt64           \ denom_a (u)
+    b n sumsq64 d>s isqrt64           \ denom_b (u)
+    umul64 d>s { denom }              \ denom (u)
+    denom 0= if 2drop 0 exit then
+    2dup d0< if dnegate -1 else 0 then { sign }  \ save sign, make numerator positive
+    FRAC-BITS d<<                     \ scale numerator
+    denom um/mod nip                  \ unsigned quotient
+    sign 0< if negate then ;          \ apply sign
 
 \ --------------------------------------------------------------
 \ Core loader
@@ -224,30 +196,28 @@ variable samples-buf         \ address of final sample cell buffer
 \  Utility: read a raw PCM file into a cell array
 \ ------------------------------------------------------------
 : load-raw ( c-addr u -- addr n )
-    r/o open-file throw               \ open for reading
-    dup file-size                     \ total bytes in file
-    2/ 2/ 2/                         \ convert bytes → number of 16‑bit samples
-    dup cells allocate throw           \ allocate space for samples (cells = 32‑bit)
-    dup >r                            \ keep address on stack
-    0 do                              \ read sample by sample
-        dup i cells +                \ address of ith cell
-        2 pick read-file throw       \ read 2 bytes
-        dup 0= if leave then
-        dup c@ 256 * swap 1+ c@ +    \ combine low/high bytes (little‑endian)
-        dup 32768 -                  \ signed conversion
-        swap !                       \ store as 32‑bit integer
-    loop
-    r> swap                          \ (addr n)
-    r> close-file throw ;
+    { c-addr u -- }
+    c-addr u r/o open-file throw { fid }
+    fid file-size throw drop 1 invert and { bytes }
+    bytes allocate throw { bytebuf }
+    bytebuf bytes fid read-file throw drop
+    bytes 2/ { nsamples }
+    nsamples cells allocate throw { samples }
+    bytebuf samples nsamples bytes>cells
+    bytebuf free throw
+    fid close-file throw
+    samples nsamples ;
 
 \ ------------------------------------------------------------
 \  Load reference and test buffers
 \ ------------------------------------------------------------
-REF-FILE load-raw constant REF-ADDR   \ address of reference samples
-REF-ADDR swap constant REF-LEN        \ number of samples in reference
+REF-FILE load-raw 2constant REF-BUF   \ ( addr n )
+TEST-FILE load-raw 2constant TEST-BUF \ ( addr n )
 
-TEST-FILE load-raw constant TEST-ADDR \ address of test samples
-TEST-ADDR swap constant TEST-LEN      \ number of samples in test file
+: REF-ADDR ( -- addr ) REF-BUF drop ;
+: REF-LEN  ( -- n )    REF-BUF nip ;
+: TEST-ADDR ( -- addr ) TEST-BUF drop ;
+: TEST-LEN  ( -- n )    TEST-BUF nip ;
 
 \ --------------------------------------------------------------
 \ Convenience wrappers for two input files
@@ -271,10 +241,10 @@ TEST-ADDR swap constant TEST-LEN      \ number of samples in test file
 : detect-command ( -- )
     TEST-LEN REF-LEN - 0 max          \ number of possible windows
     0 do
-        TEST-ADDR i +                 \ start of window
+        TEST-ADDR i cells +           \ start of window
         REF-ADDR REF-LEN correlation-fixed   \ compute correlation
-        dup THRESHOLD f> if           \ above threshold?
-            ." 👣 Detected \"come here\" at sample "
+        dup THRESHOLD-FIXED > if      \ above threshold?
+            ." Detected come here at sample "
             i REF-LEN + . cr          \ report approximate position
         then
         drop
