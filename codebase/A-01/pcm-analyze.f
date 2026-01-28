@@ -41,6 +41,11 @@ cr ." THRESHOLD-FIXED (fixed-point) = " THRESHOLD-FIXED . cr
 defer on-detect
 :noname drop ; is on-detect
 
+\ Detection gating: prevent repeated triggers until cleared.
+variable detect-locked
+: detect-lock   ( -- )  1 detect-locked ! ;
+: detect-unlock ( -- )  0 detect-locked ! ;
+
 \ Unsigned 64‑bit multiply
 : umul64 ( u1 u2 -- ud )  um* ;
 \ Optional alias – makes the source read like the original
@@ -267,17 +272,21 @@ TEST-FILE load-raw 2constant TEST-BUF \ ( addr n )
 
 : detect-command ( -- )
     0 { found }
+    detect-unlock
     REF-ADDR REF-LEN sumsq64 d>s isqrt64 { refnorm }
     TEST-LEN REF-LEN - 0 max          \ number of possible windows
     0 do
         TEST-ADDR i cells +           \ start of window
         REF-ADDR REF-LEN refnorm corr-fixed-window
         dup THRESHOLD-FIXED > if      \ above threshold?
-            i REF-LEN + dup
-            ." Detected come here at sample "
-            . cr                      \ report approximate position
-            1 to found
-            on-detect
+            detect-locked @ 0= if
+                detect-lock
+                i REF-LEN + dup
+                ." Detected come here at sample "
+                . cr                  \ report approximate position
+                1 to found
+                on-detect
+            then
         then
         drop
     loop ;
@@ -285,6 +294,7 @@ TEST-FILE load-raw 2constant TEST-BUF \ ( addr n )
 \ Coarse-to-fine scan to speed up detection
 : detect-command-fast ( -- )
     0 { found }
+    detect-unlock
     REF-ADDR REF-LEN sumsq64 d>s isqrt64 { refnorm }
     TEST-LEN REF-LEN - 0 max { maxwin }
     0 maxwin COARSE-STRIDE ?do
@@ -298,11 +308,14 @@ TEST-FILE load-raw 2constant TEST-BUF \ ( addr n )
                 TEST-ADDR j cells +
                 REF-ADDR REF-LEN refnorm corr-fixed-window
                 dup THRESHOLD-FIXED > if
-                    j REF-LEN + dup
-                    ." Detected come here at sample "
-                    . cr
-                    1 to found
-                    on-detect
+                    detect-locked @ 0= if
+                        detect-lock
+                        j REF-LEN + dup
+                        ." Detected come here at sample "
+                        . cr
+                        1 to found
+                        on-detect
+                    then
                 then
                 drop
             loop
@@ -317,6 +330,7 @@ TEST-FILE load-raw 2constant TEST-BUF \ ( addr n )
     rname rlen load-raw { raddr rcount }
     tname tlen load-raw { taddr tcount }
     0 { found }
+    detect-unlock
     raddr rcount sumsq64 d>s isqrt64 { refnorm }
     tcount rcount - 0 max { maxwin }
     0 maxwin COARSE-STRIDE ?do
@@ -329,11 +343,14 @@ TEST-FILE load-raw 2constant TEST-BUF \ ( addr n )
                 taddr j cells +
                 raddr rcount refnorm corr-fixed-window
                 dup THRESHOLD-FIXED > if
-                    j rcount + dup
-                    ." Detected come here at sample "
-                    . cr
-                    1 to found
-                    on-detect
+                    detect-locked @ 0= if
+                        detect-lock
+                        j rcount + dup
+                        ." Detected come here at sample "
+                        . cr
+                        1 to found
+                        on-detect
+                    then
                 then
                 drop
             loop

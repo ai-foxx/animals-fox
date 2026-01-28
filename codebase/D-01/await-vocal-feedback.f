@@ -38,3 +38,7 @@ defer on-vocal-failure   ( -- )
     elapsed FEEDBACK-WAIT-MS >=
   until
   on-vocal-failure ;
+
+\ Default: unlock detection when feedback completes
+:noname detect-unlock ; is on-vocal-success
+:noname detect-unlock ; is on-vocal-failure
