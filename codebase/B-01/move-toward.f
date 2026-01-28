@@ -12,15 +12,22 @@ s" left.raw"  2constant LEFT-FILE
 s" right.raw" 2constant RIGHT-FILE
 
 32 constant MAX-LAG          \ +/- samples to search for TDOA
-100 constant MAX-SPEED       \ abstract speed scale 0..100
+100 constant MAX-SPEED       \ speed scale 0..100
 
 \ -------------------  MOTOR HOOKS  ---------------------------
-\ Override these in your hardware layer
+\ TB6612FNG control via GPIO/PWM (pins TBD on real board)
+\ Pins to fill in:
+\   AIN1: ___  AIN2: ___  PWMA: ___
+\   BIN1: ___  BIN2: ___  PWMB: ___
+\   STBY: ___
+\ Override these in your hardware layer.
 defer motor-forward   ( speed -- )
+defer motor-backwards ( speed -- )
 defer motor-left      ( speed -- )
 defer motor-right     ( speed -- )
 
 :noname drop ; is motor-forward
+:noname drop ; is motor-backwards
 :noname drop ; is motor-left
 :noname drop ; is motor-right
 
