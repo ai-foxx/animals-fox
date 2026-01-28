@@ -31,6 +31,11 @@ defer motor-right     ( speed -- )
 :noname drop ; is motor-left
 :noname drop ; is motor-right
 
+\ -------------------  FLOW HOOKS  ----------------------------
+\ Called when a move-toward action completes.
+defer on-arrival   ( -- )
+:noname ; is on-arrival
+
 \ -------------------  MATH HELPERS  --------------------------
 : dabs ( d -- ud )
   2dup d0< if dnegate then ;
@@ -94,6 +99,7 @@ defer motor-right     ( speed -- )
     steer-toward
   then
   laddr free throw
-  raddr free throw ;
+  raddr free throw
+  on-arrival ;
 
 ' on-detect-move is on-detect
