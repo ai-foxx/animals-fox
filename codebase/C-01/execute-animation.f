@@ -51,8 +51,8 @@ defer led-off         ( -- )
 
 \ -------------------  LED ANIMS  -----------------------------
 : led-pulse ( r g b -- )
-  3dup led-set  BLINK-MS ms
-  led-off       BLINK-MS ms ;
+  led-set  BLINK-MS ms
+  led-off  BLINK-MS ms ;
 
 : led-smile ( -- )
   0 80 20 led-pulse

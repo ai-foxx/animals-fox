@@ -40,37 +40,44 @@ defer on-arrival   ( -- )
 : dabs ( d -- ud )
   2dup d0< if dnegate then ;
 
+: d0! ( addr -- )  0 0 rot 2! ;
+: d+! ( ud addr -- )  >r r@ 2@ d+ r> 2! ;
+
 \ Cross-correlation between two windows with a lag (signed)
+2variable corr-acc
 : corr-lag ( left-addr right-addr n lag -- d )
   { l r n lag -- }
-  0. { acc }
+  corr-acc d0!
   lag 0>= if
     n lag - 0 max { m }
     m 0 do
-      l lag + i cells + @
+      l lag cells + i cells + @
       r i cells + @
-      m* acc d+ to acc
+      m* corr-acc d+!
     loop
   else
     n lag + 0 max { m }
     m 0 do
       l i cells + @
-      r lag negate + i cells + @
-      m* acc d+ to acc
+      r lag negate cells + i cells + @
+      m* corr-acc d+!
     loop
   then
-  acc ;
+  corr-acc 2@ ;
 
 \ Estimate lag that maximizes absolute correlation
+2variable best-val
 : estimate-lag ( left-addr right-addr n max-lag -- lag )
   { l r n maxlag -- }
   0 { bestlag }
-  0. { best }
+  0 0 best-val 2!
   maxlag negate maxlag 1+ do
-    l r n i corr-lag dabs { val }
-    val best d> if
-      val to best
+    l r n i corr-lag dabs
+    2dup best-val 2@ d> if
+      best-val 2!
       i to bestlag
+    else
+      2drop
     then
   loop
   bestlag ;

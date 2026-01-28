@@ -18,8 +18,8 @@ decimal
 16000 constant SAMPLE-RATE          \ Hz – must match your audio files
 2      constant BYTES-PER-SAMPLE    \ 16‑bit = 2 bytes
 
-s" ref_test.raw"   2constant REF-FILE     \ reference template (come here)
-s" test_test.raw"  2constant TEST-FILE    \ file you want to scan
+s" ref.raw"   2constant REF-FILE     \ reference template (come here)
+s" test.raw"  2constant TEST-FILE    \ file you want to scan
 
 \ Fixed‑point parameters
 14 constant FRAC-BITS               \ 14 fractional bits → 2¹⁴ = 16384
