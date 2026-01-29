@@ -4,4 +4,8 @@ The latest noble work: Animals-Fox, a.k.a., Davie-Fox
 28.01.2026
     1229: Beginning the dedicated work for this model.
     1617: Draft currently points to needing implementation, then refinement to achieve prototypical model.
+29.01.2026
+    1211: Next task is to add the motor encoder logic and gather the parts mentions from the other repo.
+    1212: Implementation is the main initiative going-forward.
+    1247: Motor component has been added. Consideration given to the duplicate in RPi.
     
