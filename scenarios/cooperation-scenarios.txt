@@ -1,0 +1,45 @@
+November 2025
+Novel robot control-cooperation scenarios
+
+Standing in the middle of the room, calling the robot to come to the sound of my voice, stop 1 meter away, make a gesture that it is responding to my call and wants to know what I want with its time, perform a trick; perform the trick, return to previous query/result pose, and receive the verbal award, illistrating that this behavior has been uptaken--learned on-the-fly.
+
+- Begin program -
+* Await command phase
+* Execute animation routine to navigate to the direction the command came from - send verbal 'you sure?' sound to help pinpoint
+* See the target and stop motors, slow-brake, to appoximate landing at one meter or greater from the target
+* Execute animation routine: 'what's up?, what do you need?, why did you call me?'
+* Listen for incoming animation request
+* Execute spin in a circle and flash lights animation, returning to where one started
+* Execute animation routine: 'how about that?'
+* Wait for positive vocal indication
+    - (+) Execute happy animation sequence
+    - (-) Execute pensive animation sequence
+* Execute animation that the behavior has been integrated
+- End program -
+
+It's important to choose animations that engage within anthropomorphic emotional zones toward observers. However, a requisite variety of tricks need to be programmed and executed autonomously suffice that the observer will not get stuck in BORED mode.
+
+A.---
+Await command phrase
+CODEFILE: pcm-analyze.f
+
+B.---
+Move toward voice (sound)
+CODEFILE: move-toward.f
+
+C.---
+Execute animation
+- [1] Spin clockwise/counterclockwise based on mood
+- [2] Dance (need motor routine)
+- [3] Acknowledge (sound emanation)
+- [4]
+- [5]
+- [6]
+- [7]
+CODEFILE: execute-animation.feedback.f
+
+D.---
+Await vocal indicative feedback (from last executed animation)
+CODEFILE: await-vocal-feedback.f
+
+-----
