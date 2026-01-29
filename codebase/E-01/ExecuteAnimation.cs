@@ -5,12 +5,14 @@ namespace AnimalsFox.E01
 {
     public sealed class ExecuteAnimation
     {
+        // Motor hooks: bind these to your GPIO/PWM layer (e.g., TB6612FNG).
         public Action<int> MotorForward { get; set; } = _ => { };
         public Action<int> MotorBackwards { get; set; } = _ => { };
         public Action<int> MotorLeft { get; set; } = _ => { };
         public Action<int> MotorRight { get; set; } = _ => { };
         public Action MotorStop { get; set; } = () => { };
 
+        // LED hooks: bind these to your LED GPIO/driver as needed.
         public Action<int, int, int> LedSet { get; set; } = (_, __, ___) => { };
         public Action LedOff { get; set; } = () => { };
 

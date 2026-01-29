@@ -12,6 +12,7 @@ namespace AnimalsFox.E01
 
         public int RefLength { get; set; }
 
+        // Motor hooks: bind these to your GPIO/PWM layer (e.g., TB6612FNG).
         public Action<int> MotorForward { get; set; } = _ => { };
         public Action<int> MotorBackwards { get; set; } = _ => { };
         public Action<int> MotorLeft { get; set; } = _ => { };
