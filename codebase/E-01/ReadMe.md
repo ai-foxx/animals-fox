@@ -34,10 +34,15 @@ From the repo root:
 dotnet run --project codebase/E-01 -- --once
 ```
 
+## GPIO hookup
+
+See `codebase/E-01/GPIO-SETUP.md` for the recommended Raspberry Pi 4B + TB6612FNG wiring.
+
 ### Optional flags
 
 - `--once`: stop after the first detection (prevents repeated detections)
 - `--simulate-vocal`: simulate vocal success after 500ms (only when provided)
+- `--gpio`: use Raspberry Pi GPIO/PWM instead of console stubs
 
 Example:
 
@@ -52,3 +57,17 @@ dotnet run --project codebase/E-01 -- --once <ref.raw> <test.raw> [left.raw] [ri
 ```
 
 If no paths are provided, defaults are `tests/ref.raw`, `tests/test.raw`, `tests/left.raw`, `tests/right.raw`.
+
+### GPIO mode (Raspberry Pi)
+
+Use `--gpio` to enable the real GPIO/PWM implementation. Without it, the runner prints to console only.
+
+```bash
+dotnet run --project codebase/E-01 -- --once --gpio
+```
+
+You can combine it with other flags:
+
+```bash
+dotnet run --project codebase/E-01 -- --once --simulate-vocal --gpio
+```
