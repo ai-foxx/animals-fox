@@ -14,3 +14,11 @@ Code repo for the new machine.
 ### Running tests
 
 `gforth tests/chain-test.f`
+
+### Errata
+
+The necessary female connector for the battery is 
+
+Series	Pitch	Applications
+
+JST XH	2.5 mm	Commonly used in battery packs, LED strips, and various electronic modules.
