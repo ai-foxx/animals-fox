@@ -12,4 +12,5 @@ The latest noble work: Animals-Fox, a.k.a., Davie-Fox
 30.01.2026
     1156: Starting-in.
     1215: Recharging the battery components is still open on the motor power.
+    1224: An option is to build my own cable for ad-hoc but something more solid would be needed longer-term.
     
