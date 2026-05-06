@@ -36,7 +36,7 @@ Sample PCM files are in `tests/`:
 From the repo root, run with Gforth:
 
 ```bash
-gforth codebase/A-01/pcm-analyze.f \\
+forth codebase/A-01/pcm-analyze.f \\
   codebase/B-01/move-toward.f \\
   codebase/C-01/execute-animation.f \\
   codebase/D-01/await-vocal-feedback.f \\
@@ -48,7 +48,7 @@ gforth codebase/A-01/pcm-analyze.f \\
 To specify custom reference and test files, use the argument-based helpers:
 
 ```bash
-gforth codebase/A-01/pcm-analyze.f \\
+forth codebase/A-01/pcm-analyze.f \\
   -e 'detect-command-fast-args bye' <ref.raw> <test.raw>
 ```
 
